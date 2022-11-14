@@ -39,6 +39,7 @@ typedef struct {
     GameStates state;
     Actions action;
     int score, moves;
+    int last_inserted;
 } Game;
 
 bool has_won(Game* game)
@@ -74,7 +75,7 @@ int empty_tiles(Game* game)
     return amount;
 }
 
-void add_random_tile(Game* game)
+int add_random_tile(Game* game)
 {
     int tiles = empty_tiles(game);
     int tile = ((rand() / 16) * tiles) / (RAND_MAX / 16);
@@ -83,15 +84,42 @@ void add_random_tile(Game* game)
         if (game->board[i] == 0) {
             if (n == tile) {
                 game->board[i] = rand() > RAND_MAX / 3 * 2 ? 2 : 1;
-                return;
+                return i;
             } else {
                 n++;
             }
         }
     }
+    return -1;
 }
 
-void move_cell(int* target, int* src)
+void move_right(Game* game)
+{
+    for (int y = 0; y < 4; y++) {
+        int p = 3;
+        for (int i = 3; i >= 0; i--) {
+            if (game->board[y * 4 + i] != 0) {
+                if (i < p) {
+                    game->board[y * 4 + p] = game->board[y * 4 + i];
+                    game->board[y * 4 + i] = 0;
+                }
+                p -= 1;
+            }
+        }
+        for (int i = 3; i >= 0; i--) {
+            if (game->board[y * 4 + i] == game->board[y * 4 + i - 1]
+                && game->board[y * 4 + i] > 0) {
+                game->board[y * 4 + i] += 1;
+                for (int j = i - 1; j >= 1; j--) {
+                    game->board[y * 4 + j] = game->board[y * 4 + j - 1];
+                }
+                game->board[y * 4 + 0] = 0;
+            }
+        }
+    }
+}
+
+bool move_cell_maybe_break(int* target, int* src)
 {
     if (*target == 0) {
         *target = *src;
@@ -99,39 +127,38 @@ void move_cell(int* target, int* src)
     } else if (*target == *src) {
         *target += 1;
         *src = 0;
+        return true;
+    } else if (*src != 0) {
+        return true;
     }
-}
-
-void move_right(Game* game)
-{
-    for (int y = 0; y < 4; y++)
-        for (int ix = 0; ix < 3; ix++)
-            for (int jx = ix; jx < 3; jx++)
-                move_cell(&game->board[y * 4 + jx + 1], &game->board[y * 4 + jx]);
+    return false;
 }
 
 void move_left(Game* game)
 {
     for (int y = 0; y < 4; y++)
-        for (int ix = 3; ix > 0; ix--)
-            for (int jx = ix; jx > 0; jx--)
-                move_cell(&game->board[y * 4 + jx - 1], &game->board[y * 4 + jx]);
+        for (int ix = 0; ix < 3; ix++)
+            for (int jx = ix + 1; jx < 4; jx++)
+                if (move_cell_maybe_break(&game->board[y * 4 + ix], &game->board[y * 4 + jx]))
+                    break;
 }
 
 void move_down(Game* game)
 {
     for (int x = 0; x < 4; x++)
-        for (int iy = 0; iy < 3; iy++)
-            for (int jy = iy; jy < 3; jy++)
-                move_cell(&game->board[(jy + 1) * 4 + x], &game->board[jy * 4 + x]);
+        for (int iy = 3; iy >= 0; iy--)
+            for (int jy = iy - 1; jy >= 0; jy--)
+                if (move_cell_maybe_break(&game->board[iy * 4 + x], &game->board[jy * 4 + x]))
+                    break;
 }
 
 void move_up(Game* game)
 {
     for (int x = 0; x < 4; x++)
-        for (int iy = 3; iy > 0; iy--)
-            for (int jy = iy; jy > 0; jy--)
-                move_cell(&game->board[(jy - 1) * 4 + x], &game->board[jy * 4 + x]);
+        for (int iy = 0; iy < 3; iy++)
+            for (int jy = iy + 1; jy < 4; jy++)
+                if (move_cell_maybe_break(&game->board[iy * 4 + x], &game->board[jy * 4 + x]))
+                    break;
 }
 
 void handle_action(Game* game)
@@ -151,11 +178,6 @@ void handle_action(Game* game)
         break;
     default:
         break;
-    };
-    if (game->action != A_NONE) {
-        game->action = A_NONE;
-        add_random_tile(game);
-        game->moves++;
     }
 }
 
@@ -171,6 +193,11 @@ void update(Game* game, double delta)
 {
     if (game->state == GS_PLAYING) {
         handle_action(game);
+        if (game->action != A_NONE) {
+            game->action = A_NONE;
+            game->last_inserted = add_random_tile(game);
+            game->moves++;
+        }
         if (has_won(game))
             game->state = GS_WON;
         else if (has_lost(game))
@@ -179,8 +206,11 @@ void update(Game* game, double delta)
     game->score = calculate_score(game);
 }
 
-SDL_Color tile_color(int tile_value)
+SDL_Color tile_color(Game* game, int x, int y)
 {
+    if (y * 4 + x == game->last_inserted)
+        return (SDL_Color) { 0x00, 0xFF, 0x00, 0 };
+    int tile_value = game->board[y * 4 + x];
     return tile_value > 0
         ? (SDL_Color) { 0xFF, 0x44 + 0x11 * tile_value, 0xBB - 0x11 * tile_value, 0 }
         : (SDL_Color) { 0x88, 0x88, 0x88, 0 };
@@ -214,7 +244,7 @@ TextCenterOffset text_center_offset(int value)
 
 void render_tile(Game* game, SDL_Renderer* renderer, TTF_Font* font, int x, int y)
 {
-    SDL_Color color = tile_color(game->board[y * 4 + x]);
+    SDL_Color color = tile_color(game, x, y);
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
     SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, 0);
     SDL_RenderFillRect(renderer,
@@ -325,14 +355,21 @@ int main(int argc, char** argv)
 {
     srand(time(NULL));
     Game game = {
-        .board = { 0 },
+        // .board = { 0 },
+        .board = {
+            1, 1, 2, 0,
+            0, 2, 1, 1,
+            0, 0, 0, 0,
+            0, 0, 0, 0, 
+        },
         .state = GS_PLAYING,
         .action = A_NONE,
         .moves = 0,
         .score = 0,
+        .last_inserted = -1,
     };
-    add_random_tile(&game);
-    add_random_tile(&game);
+    // add_random_tile(&game);
+    // add_random_tile(&game);
 
     SDL_Event event;
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -380,6 +417,8 @@ int main(int argc, char** argv)
         char titleText[32] = { 0 };
         snprintf(titleText, 32, "2048 - Score = %d, Moves = %d", game.score, game.moves);
         SDL_SetWindowTitle(window, titleText);
+
+        SDL_Delay(6);
     }
 
     TTF_CloseFont(font);
