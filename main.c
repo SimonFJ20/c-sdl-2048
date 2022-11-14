@@ -93,32 +93,6 @@ int add_random_tile(Game* game)
     return -1;
 }
 
-void move_right(Game* game)
-{
-    for (int y = 0; y < 4; y++) {
-        int p = 3;
-        for (int i = 3; i >= 0; i--) {
-            if (game->board[y * 4 + i] != 0) {
-                if (i < p) {
-                    game->board[y * 4 + p] = game->board[y * 4 + i];
-                    game->board[y * 4 + i] = 0;
-                }
-                p -= 1;
-            }
-        }
-        for (int i = 3; i >= 0; i--) {
-            if (game->board[y * 4 + i] == game->board[y * 4 + i - 1]
-                && game->board[y * 4 + i] > 0) {
-                game->board[y * 4 + i] += 1;
-                for (int j = i - 1; j >= 1; j--) {
-                    game->board[y * 4 + j] = game->board[y * 4 + j - 1];
-                }
-                game->board[y * 4 + 0] = 0;
-            }
-        }
-    }
-}
-
 bool move_cell_maybe_break(int* target, int* src)
 {
     if (*target == 0) {
@@ -132,6 +106,15 @@ bool move_cell_maybe_break(int* target, int* src)
         return true;
     }
     return false;
+}
+
+void move_right(Game* game)
+{
+    for (int y = 0; y < 4; y++)
+        for (int ix = 3; ix >= 0; ix--)
+            for (int jx = ix - 1; jx >= 0; jx--)
+                if (move_cell_maybe_break(&game->board[y * 4 + ix], &game->board[y * 4 + jx]))
+                    break;
 }
 
 void move_left(Game* game)
@@ -355,21 +338,15 @@ int main(int argc, char** argv)
 {
     srand(time(NULL));
     Game game = {
-        // .board = { 0 },
-        .board = {
-            1, 1, 2, 0,
-            0, 2, 1, 1,
-            0, 0, 0, 0,
-            0, 0, 0, 0, 
-        },
+        .board = { 0 },
         .state = GS_PLAYING,
         .action = A_NONE,
         .moves = 0,
         .score = 0,
         .last_inserted = -1,
     };
-    // add_random_tile(&game);
-    // add_random_tile(&game);
+    add_random_tile(&game);
+    add_random_tile(&game);
 
     SDL_Event event;
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
