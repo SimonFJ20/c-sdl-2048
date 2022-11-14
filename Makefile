@@ -4,8 +4,11 @@ TARGET = game
 CC = gcc
 LD = gcc
 
-CFLAGS = -Wall -Wpedantic
+CFLAGS = -Wall -Wpedantic -Werror -O3
 LFLAGS = -lm -lSDL2 -lSDL2_ttf
+
+# comment line below, if you don't want the inserted tile to be colored green
+CFLAGS += -DCOLOR_INSERTED_TILE
 
 CFILES = $(wildcard *.c)
 OFILES = $(patsubst %.c, %.o, $(CFILES))

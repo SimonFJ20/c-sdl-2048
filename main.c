@@ -191,8 +191,10 @@ void update(Game* game, double delta)
 
 SDL_Color tile_color(Game* game, int x, int y)
 {
+#ifdef COLOR_INSERTED_TILE
     if (y * 4 + x == game->last_inserted)
         return (SDL_Color) { 0x00, 0xFF, 0x00, 0 };
+#endif
     int tile_value = game->board[y * 4 + x];
     return tile_value > 0
         ? (SDL_Color) { 0xFF, 0x44 + 0x11 * tile_value, 0xBB - 0x11 * tile_value, 0 }
