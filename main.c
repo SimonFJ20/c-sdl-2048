@@ -40,6 +40,7 @@ typedef struct {
     Actions action;
     int score, moves;
     int last_inserted;
+    bool has_moved;
 } Game;
 
 bool has_won(Game* game)
@@ -93,14 +94,17 @@ int add_random_tile(Game* game)
     return -1;
 }
 
-bool move_cell_maybe_break(int* target, int* src)
+bool move_cell_maybe_break(Game* game, int* target, int* src)
 {
-    if (*target == 0) {
+    if (*target == 0 && *src != 0) {
         *target = *src;
         *src = 0;
-    } else if (*target == *src) {
+        game->has_moved = true;
+    } else if (*target == *src && *target != 0 && *src != 0) {
         *target += 1;
         *src = 0;
+        game->score += pow(2, *target);
+        game->has_moved = true;
         return true;
     } else if (*src != 0) {
         return true;
@@ -113,7 +117,7 @@ void move_right(Game* game)
     for (int y = 0; y < 4; y++)
         for (int ix = 3; ix >= 0; ix--)
             for (int jx = ix - 1; jx >= 0; jx--)
-                if (move_cell_maybe_break(&game->board[y * 4 + ix], &game->board[y * 4 + jx]))
+                if (move_cell_maybe_break(game, &game->board[y * 4 + ix], &game->board[y * 4 + jx]))
                     break;
 }
 
@@ -122,7 +126,7 @@ void move_left(Game* game)
     for (int y = 0; y < 4; y++)
         for (int ix = 0; ix < 3; ix++)
             for (int jx = ix + 1; jx < 4; jx++)
-                if (move_cell_maybe_break(&game->board[y * 4 + ix], &game->board[y * 4 + jx]))
+                if (move_cell_maybe_break(game, &game->board[y * 4 + ix], &game->board[y * 4 + jx]))
                     break;
 }
 
@@ -131,7 +135,7 @@ void move_down(Game* game)
     for (int x = 0; x < 4; x++)
         for (int iy = 3; iy >= 0; iy--)
             for (int jy = iy - 1; jy >= 0; jy--)
-                if (move_cell_maybe_break(&game->board[iy * 4 + x], &game->board[jy * 4 + x]))
+                if (move_cell_maybe_break(game, &game->board[iy * 4 + x], &game->board[jy * 4 + x]))
                     break;
 }
 
@@ -140,7 +144,7 @@ void move_up(Game* game)
     for (int x = 0; x < 4; x++)
         for (int iy = 0; iy < 3; iy++)
             for (int jy = iy + 1; jy < 4; jy++)
-                if (move_cell_maybe_break(&game->board[iy * 4 + x], &game->board[jy * 4 + x]))
+                if (move_cell_maybe_break(game, &game->board[iy * 4 + x], &game->board[jy * 4 + x]))
                     break;
 }
 
@@ -164,21 +168,17 @@ void handle_action(Game* game)
     }
 }
 
-int calculate_score(Game* game)
-{
-    int score = 0;
-    for (int i = 0; i < 16; i++)
-        score += pow(2, game->board[i]);
-    return score;
-}
-
 void update(Game* game, double delta)
 {
     if (game->state == GS_PLAYING) {
+        game->has_moved = false;
         handle_action(game);
         if (game->action != A_NONE) {
             game->action = A_NONE;
-            game->last_inserted = add_random_tile(game);
+            if (game->has_moved)
+                game->last_inserted = add_random_tile(game);
+            else
+                game->last_inserted = -1;
             game->moves++;
         }
         if (has_won(game))
@@ -186,7 +186,6 @@ void update(Game* game, double delta)
         else if (has_lost(game))
             game->state = GS_LOST;
     }
-    game->score = calculate_score(game);
 }
 
 SDL_Color tile_color(Game* game, int x, int y)
@@ -346,6 +345,7 @@ int main(int argc, char** argv)
         .moves = 0,
         .score = 0,
         .last_inserted = -1,
+        .has_moved = false,
     };
     add_random_tile(&game);
     add_random_tile(&game);
